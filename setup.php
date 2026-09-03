@@ -1,0 +1,5 @@
+<?php require_once "config/database.php";
+$a=[["Campus Admin","admin@campus.local","admin123","admin"],["Electrical Staff","staff@campus.local","staff123","staff"],["Demo Student","student@campus.local","student123","student"]];
+foreach($a as $x){$q=$conn->prepare("SELECT id FROM users WHERE email=?");$q->bind_param("s",$x[1]);$q->execute();if(!$q->get_result()->fetch_assoc()){$h=password_hash($x[2],PASSWORD_DEFAULT);$q=$conn->prepare("INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)");$q->bind_param("ssss",$x[0],$x[1],$h,$x[3]);$q->execute();}}
+$q=$conn->query("SELECT id FROM users WHERE email='staff@campus.local'");$u=$q->fetch_assoc();if($u){$uid=$u["id"];$q=$conn->prepare("SELECT id FROM staff WHERE user_id=?");$q->bind_param("i",$uid);$q->execute();if(!$q->get_result()->fetch_assoc()){$q=$conn->prepare("INSERT INTO staff(user_id,department) VALUES(?,'Electrical Maintenance')");$q->bind_param("i",$uid);$q->execute();}}
+echo "<h2>Setup complete</h2><p>Delete setup.php now, then open login.php.</p>";?>

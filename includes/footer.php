@@ -1,0 +1,1 @@
+</main><footer>Smart Campus Service & Complaint Management System • Mini Project</footer></body></html>

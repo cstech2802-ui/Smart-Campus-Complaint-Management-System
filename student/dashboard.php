@@ -1,0 +1,5 @@
+<?php require_once "../config/database.php";require_once "../includes/auth.php";require_role("student");$id=$_SESSION["user_id"];
+$s=$conn->prepare("SELECT COUNT(*) c FROM complaints WHERE user_id=?");$s->bind_param("i",$id);$s->execute();$total=$s->get_result()->fetch_assoc()["c"];
+$s=$conn->prepare("SELECT COUNT(*) c FROM complaints WHERE user_id=? AND status='Resolved'");$s->bind_param("i",$id);$s->execute();$resolved=$s->get_result()->fetch_assoc()["c"];
+include "../includes/header.php";?><h2>Student Dashboard</h2><div class="actions"><a class="btn" href="complaint_add.php">+ New Complaint</a><a class="btn alt" href="complaints.php">My Complaints</a></div>
+<div class="grid"><div class="card">Total Complaints<div class="stat"><?=$total?></div></div><div class="card">Resolved<div class="stat"><?=$resolved?></div></div></div><?php include "../includes/footer.php";?>
