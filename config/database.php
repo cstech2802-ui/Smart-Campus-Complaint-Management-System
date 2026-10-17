@@ -14,4 +14,18 @@ try {
 } catch (PDOException $e) {
     die("Database connection failed: " . $e->getMessage());
 }
+    try {
+    $conn = new PDO("pgsql:host=$host;port=$port;dbname=$db;", $user, $pass, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+    ]);
+} catch (PDOException $e) {
+    die("Database connection failed: " . $e->getMessage());
+}
+
+// ADD THIS GLOBALLY TO FIX THE UNDEFINED FUNCTION ERROR:
+if (!function_exists('e')) {
+    function e($text) {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
 ?>
