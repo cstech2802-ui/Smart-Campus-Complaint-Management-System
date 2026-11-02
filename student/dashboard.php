@@ -1,82 +1,106 @@
 <?php
-require_once "../config/database.php";
-session_start();
+require_once '../config/database.php';
+require_once '../includes/auth.php';
 
-// SAFEGUARD: Local fallback declaration for the e() function 
-// This ensures includes/header.php can NEVER throw an undefined function crash!
-if (!function_exists('e')) {
-    function e($text) {
-        return htmlspecialchars($text ?? '', ENT_QUOTES, 'UTF-8');
-    }
-}
-
-if (!isset($_SESSION["user_id"]) || $_SESSION["role"] !== "student") {
+if (!isLoggedIn() || $_SESSION['role'] !== 'student') {
     header("Location: ../login.php");
-    exit;
+    exit();
 }
 
-$student_id = $_SESSION["user_id"];
-$complaints = [];
-$error_msg = "";
+$student_id = $_SESSION['user_id'];
 
-try {
-    // Fetch user complaints with assigned staff details using an optional left join
-    $sql = "SELECT c.*, u.name as staff_name 
-            FROM complaints c 
-            LEFT JOIN users u ON c.assigned_staff_id = u.id 
-            WHERE c.student_id = :student_id 
-            ORDER BY c.created_at DESC";
-            
-    $stmt = $conn->prepare($sql);
-    $stmt->execute(['student_id' => $student_id]);
-    $complaints = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $error_msg = "Could not fetch complaints: " . $e->getMessage();
-}
+// Fetch statistics
+$stmt = $pdo->prepare("SELECT 
+    COUNT(*) as total,
+    SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) as open,
+    SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) as in_progress,
+    SUM(CASE WHEN status = 'Resolved' THEN 1 ELSE 0 END) as resolved
+    FROM complaints WHERE student_id = ?");
+$stmt->execute([$student_id]);
+$stats = $stmt->fetch();
 
-include "../includes/header.php";
+// Fetch recent complaints
+$stmt_recent = $pdo->prepare("SELECT * FROM complaints WHERE student_id = ? ORDER BY created_at DESC LIMIT 5");
+$stmt_recent->execute([$student_id]);
+$recent_complaints = $stmt_recent->fetchAll();
+
+include '../includes/header.php';
 ?>
-<div class="dashboard">
-    <h2>Welcome, <?= htmlspecialchars($_SESSION["name"] ?? 'Student') ?> (Student)</h2>
-    <div class="actions">
-        <a href="submit_complaint.php" class="btn">File a New Complaint</a>
-        <a href="../logout.php" class="btn alt">Logout</a>
+
+<div class="container my-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Student Dashboard</h2>
+        <a href="submit_complaint.php" class="btn btn-primary">+ Lodge New Complaint</a>
     </div>
 
-    <h3>Your Filed Complaints</h3>
-    <?php if (!empty($error_msg)): ?>
-        <div class="alert bad"><?= htmlspecialchars($error_msg) ?></div>
-    <?php endif; ?>
+    <!-- Statistics Cards -->
+    <div class="row text-center mb-4">
+        <div class="col-md-3">
+            <div class="card p-3 shadow-sm">
+                <h5 class="text-muted">Total Complaints</h5>
+                <h3><?php echo $stats['total'] ?? 0; ?></h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 shadow-sm border-warning">
+                <h5 class="text-warning">Open</h5>
+                <h3><?php echo $stats['open'] ?? 0; ?></h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 shadow-sm border-info">
+                <h5 class="text-info">In Progress</h5>
+                <h3><?php echo $stats['in_progress'] ?? 0; ?></h3>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-3 shadow-sm border-success">
+                <h5 class="text-success">Resolved</h5>
+                <h3><?php echo $stats['resolved'] ?? 0; ?></h3>
+            </div>
+        </div>
+    </div>
 
-    <?php if (empty($complaints)): ?>
-        <p>You have not submitted any complaints yet.</p>
-    <?php else: ?>
-        <table class="tracking-table">
-            <thead>
-                <tr>
-                    <th>Title</th>
-                    <th>Category</th>
-                    <th>Status</th>
-                    <th>Assigned Staff</th>
-                    <th>Date Filed</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($complaints as $c): ?>
-                    <tr>
-                        <td><b><?= htmlspecialchars($c["title"] ?? '') ?></b></td>
-                        <td><?= htmlspecialchars($c["category"] ?? '') ?></td>
-                        <td>
-                            <span class="status-badge <?= htmlspecialchars($c["status"] ?? 'pending') ?>">
-                                <?= htmlspecialchars(ucfirst($c["status"] ?? 'pending')) ?>
-                            </span>
-                        </td>
-                        <td><?= !empty($c["staff_name"]) ? htmlspecialchars($c["staff_name"]) : "<i>Not Assigned Yet</i>" ?></td>
-                        <td><?= !empty($c["created_at"]) ? date("Y-m-d H:i", strtotime($c["created_at"])) : 'N/A' ?></td>
-                    </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-    <?php endif; ?>
+    <!-- Recent Complaints Table -->
+    <div class="card">
+        <div class="card-header">Recent Complaints History</div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Category</th>
+                            <th>Title</th>
+                            <th>Priority</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (count($recent_complaints) > 0): ?>
+                            <?php foreach ($recent_complaints as $c): ?>
+                                <tr>
+                                    <td>#<?php echo $c['id']; ?></td>
+                                    <td><?php echo htmlspecialchars($c['category']); ?></td>
+                                    <td><?php echo htmlspecialchars($c['title']); ?></td>
+                                    <td><span class="badge bg-secondary"><?php echo $c['priority']; ?></span></td>
+                                    <td>
+                                        <span class="badge badge-<?php echo strtolower(str_replace(' ', '-', $c['status'])); ?>">
+                                            <?php echo $c['status']; ?>
+                                        </span>
+                                    </td>
+                                    <td><?php echo $c['created_at']; ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr><td colspan="6" class="text-center text-muted">No complaints submitted yet.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
-<?php include "../includes/footer.php"; ?>
+
+<?php include '../includes/footer.php'; ?>
